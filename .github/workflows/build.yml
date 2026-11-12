@@ -1,0 +1,58 @@
+name: Filter und Extension bauen
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * *' # täglich: frische Filterlisten und Cookie-Regeln
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # neueste Cookie-Regeln innerhalb der Hauptversion (kompatibel zum installierten Addon)
+      - run: npm install --no-save @duckduckgo/autoconsent@^18
+
+      - run: npm test
+
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Filter kompilieren
+        run: node tools/build-filters.mjs
+
+      - name: Extension bauen
+        run: node tools/build-ext.mjs --base "${{ steps.pages.outputs.base_url }}/"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

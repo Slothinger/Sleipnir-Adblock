@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OneTrust</title></head>
+<body>
+<h1>Shop</h1>
+<div id="onetrust-consent-sdk">
+  <div id="onetrust-banner-sdk" style="position:fixed;left:0;right:0;bottom:0;background:#eee;padding:16px;z-index:9999">
+    <p id="onetrust-policy-text">We use cookies to improve your experience and for marketing.</p>
+    <button id="onetrust-pc-btn-handler">Cookie Settings</button>
+    <button id="onetrust-reject-all-handler" onclick="decide('reject')">Reject All</button>
+    <button id="onetrust-accept-btn-handler" onclick="decide('accept')">Accept All Cookies</button>
+  </div>
+</div>
+<script>
+function decide(v) { window.decision = v; document.getElementById('onetrust-banner-sdk').style.display = 'none'; }
+</script>
+</body></html>

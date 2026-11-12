@@ -1,0 +1,7 @@
+! Eigene Filter in EasyList-Syntax. Unterstützt:
+!   example.com##.werbung          Element auf example.com ausblenden
+!   ##.ueberall-werbung            Element auf allen Seiten ausblenden
+!   example.com#@#.kein-werbung    Ausblendregel auf example.com aufheben
+!   ||werbeserver.example^         Anfragen an diesen Host blockieren
+!   @@||cdn.example^               Host nie blockieren
+!   @@||example.com^$generichide   auf example.com nur seitenspezifische Ausblendregeln nutzen

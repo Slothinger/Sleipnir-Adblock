@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Artikel</title></head>
+<body>
+<h1 id="content">Artikel</h1>
+<div id="ad_banner">ANZEIGE (generische EasyList-Regel)</div>
+<div class="werbung">Werbung (EasyList Germany)</div>
+<iframe id="initial-ad" src="about:blank" width="300" height="250"></iframe>
+<p>Normaler Inhalt bleibt sichtbar.</p>
+<script>
+const port = location.port;
+const ext = (host, path) => 'http://' + host + ':' + port + path;
+document.getElementById('initial-ad').src = ext('tpc.googlesyndication.com', '/static');
+window.results = {};
+window.runDynamic = function () {
+    const s = document.createElement('script');
+    s.onerror = () => (results.script = 'blocked');
+    s.onload = () => (results.script = 'loaded');
+    s.src = ext('pagead2.googlesyndication.com', '/pagead/js/adsbygoogle.js');
+    document.head.appendChild(s);
+    fetch(ext('securepubads.g.doubleclick.net', '/gampad/ads')).then(() => (results.fetch = 'ok'), () => (results.fetch = 'blocked'));
+    const img = new Image();
+    img.onerror = () => (results.img = 'blocked');
+    img.onload = () => (results.img = 'loaded');
+    img.src = ext('www.google-analytics.com', '/collect?v=1');
+    const f = document.createElement('iframe');
+    f.id = 'dyn-ad';
+    f.src = ext('tpc.googlesyndication.com', '/frame');
+    document.body.appendChild(f);
+    const x = new XMLHttpRequest();
+    x.open('GET', ext('adnxs.com', '/ut/v3'));
+    x.onerror = () => (results.xhr = 'blocked');
+    x.onload = () => (results.xhr = 'ok');
+    x.send();
+    fetch('/api/data').then((r) => r.text()).then((t) => (results.firstParty = t), () => (results.firstParty = 'blocked'));
+    fetch(ext('cdn.example-cdn.org', '/lib.js')).then(() => (results.thirdPartyOk = 'ok'), () => (results.thirdPartyOk = 'blocked'));
+    const w = window.open(ext('doubleclick.net', '/pop'));
+    results.popup = w === null ? 'blocked' : 'opened';
+    if (w) w.close();
+    results.fetchToString = String(window.fetch);
+};
+</script>
+</body></html>

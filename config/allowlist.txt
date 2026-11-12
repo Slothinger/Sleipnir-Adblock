@@ -1,0 +1,8 @@
+# Globale Ausnahmen (gelten auf allen Geräten nach dem nächsten Filter-Build).
+# Eine Domain pro Zeile, Subdomains sind eingeschlossen.
+# Ohne Zusatz ist der Blocker dort komplett aus; mit "ads" oder "cookies" nur die jeweilige Funktion.
+#
+# Beispiele:
+# meinebank.de
+# example.com ads
+# shop.example cookies

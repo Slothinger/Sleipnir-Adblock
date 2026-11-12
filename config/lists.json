@@ -1,0 +1,8 @@
+[
+    { "id": "easylist", "title": "EasyList", "url": "https://easylist.to/easylist/easylist.txt", "kind": "ads", "enabled": true },
+    { "id": "easylistgermany", "title": "EasyList Germany", "url": "https://easylist.to/easylistgermany/easylistgermany.txt", "kind": "ads", "enabled": true },
+    { "id": "easyprivacy", "title": "EasyPrivacy", "url": "https://easylist.to/easylist/easyprivacy.txt", "kind": "ads", "enabled": true },
+    { "id": "cookies", "title": "EasyList Cookie List", "url": "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt", "kind": "cookies", "enabled": true },
+    { "id": "annoyances", "title": "Fanboy's Annoyance List", "url": "https://secure.fanboy.co.nz/fanboy-annoyance.txt", "kind": "ads", "enabled": false },
+    { "id": "ublock", "title": "uBlock filters", "url": "https://ublockorigin.github.io/uAssets/filters/filters.txt", "kind": "ads", "enabled": false }
+]
