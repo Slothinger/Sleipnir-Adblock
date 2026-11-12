@@ -31,9 +31,8 @@ const requests = [];
 function chromePath() {
     if (process.env.SHIELD_CHROME) return process.env.SHIELD_CHROME;
     const base = path.join(process.env.HOME || '', '.cache/ms-playwright');
-    for (const v of ['chromium-1169', 'chromium-1208']) {
-        const p = path.join(base, v, 'chrome-linux64/chrome');
-        if (existsSync(p)) return p;
+    for (const p of ['chromium-1208/chrome-linux64/chrome', 'chromium-1169/chrome-linux/chrome']) {
+        if (existsSync(path.join(base, p))) return path.join(base, p);
     }
     return undefined;
 }
@@ -99,16 +98,17 @@ describe('shield e2e', () => {
         server?.close();
     });
 
-    /** Sleipnir's wrapper (a2/w2.java): strict IIFE, guard, SLEX_* API, then the extension code. */
-    function sleipnirWrap(code) {
-        // javascript: URLs are percent-decoded before running; mimic that
-        const decoded = code.replace(/%([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
-        return `(function(){'use strict';try {if (window['slex_guard_1']) return;window['slex_guard_1'] = true;var SLEX_locale="en";
-    function SLEX_httpGet(url){var x=new XMLHttpRequest();x.open('GET',url,false);x.send();return x.status==200?x.responseText:null;}
-    function SLEX_addStyle(css){var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);}
-    var jq=null;(function($,jQuery){
-    ${decoded}
-    })(jq, jq);} catch (e) {window.__slexError = String(e)};})();`;
+    /**
+     * What Sleipnir hands to WebView.loadUrl (q2/u + a2/w2 in the APK): the code without the metadata
+     * block, inside a strict IIFE with a guard and the SLEX_* API. Navigating to it makes Chromium apply
+     * the real javascript: URL processing (line breaks stripped, %XX decoded).
+     */
+    function sleipnirUrl(fileText) {
+        const lines = fileText.split('\n');
+        const code = lines.slice(lines.findIndex((l) => /^\s*\/\/\s*==\/UserScript==/.test(l)) + 1).join('\n');
+        return "javascript:(function(){'use strict';try {if (window['slex_guard_1']) return;window['slex_guard_1'] = true;var SLEX_locale=\"en\";"
+            + "function SLEX_httpGet(url){var x=new XMLHttpRequest();x.open('GET',url,false);x.send();return x.status==200?x.responseText:null;}"
+            + 'var jq=null;(function($,jQuery){\n' + code + '\n})(jq, jq);} catch (e) {window.__slexError = String(e)};})();';
     }
 
     async function openPage(urlPath, { host = 'www.testsite.de', storage = null, filtersDown = false } = {}) {
@@ -130,7 +130,8 @@ describe('shield e2e', () => {
             await page.reload({ waitUntil: 'load' });
         }
         const injectedAt = Date.now();
-        await page.evaluate(sleipnirWrap(extCode));
+        await page.evaluate((url) => { location.href = url; }, sleipnirUrl(extCode));
+        await page.waitForFunction(() => window.slex_guard_1 === true, null, { timeout: 5000 });
         return { page, context, errors, injectedAt };
     }
 
@@ -206,6 +207,14 @@ describe('shield e2e', () => {
             return !el || getComputedStyle(el).display === 'none';
         }, null, { timeout: 25000 });
         assert.equal(await page.evaluate(() => window.decision || null), null);
+        assert.notEqual(await page.evaluate(() => getComputedStyle(document.body).overflow), 'hidden');
+        await context.close();
+    });
+
+    test('anti-adblock notice is removed with its backdrop and scroll lock', async () => {
+        const { page, context } = await openPage('anti-adblock.html');
+        await page.waitForFunction(() => document.getElementById('nag') && getComputedStyle(document.getElementById('nag')).display === 'none', null, { timeout: 15000 });
+        assert.equal(await visible(page, '#dim'), false);
         assert.notEqual(await page.evaluate(() => getComputedStyle(document.body).overflow), 'hidden');
         await context.close();
     });

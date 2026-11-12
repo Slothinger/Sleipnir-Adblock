@@ -5,3 +5,6 @@
 !   ||werbeserver.example^         Anfragen an diesen Host blockieren
 !   @@||cdn.example^               Host nie blockieren
 !   @@||example.com^$generichide   auf example.com nur seitenspezifische Ausblendregeln nutzen
+
+! Seedtag "inScreen"-Anzeigen (z. B. notebookcheck.com), von EasyList nicht generisch erfasst
+##.st-adunit

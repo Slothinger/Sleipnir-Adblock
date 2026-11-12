@@ -5,6 +5,7 @@
 //
 // --base: URL the public/ directory is served from (filters at <base>f/, extension at <base>).
 
+import { tokenizer } from 'acorn';
 import { build } from 'esbuild';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -15,13 +16,39 @@ const OUT_DIR = path.join(ROOT, 'public');
 export const EXT_FILE = 'sleipnir-shield.slex.js';
 
 /**
- * Sleipnir runs extensions through WebView.loadUrl("javascript:..."), and javascript: URLs are
- * percent-decoded before they run: "%3D" inside a string would arrive as "=". Escape every
- * percent-hex sequence inside literals as \x25 so the code is identical whether or not decoding happens.
- * Whitespace minification stays off, so "%" in code only ever appears as " % " (modulo operator).
+ * Sleipnir runs extensions through WebView.loadUrl("javascript:..."). Chromium parses that as a URL:
+ *  - tabs, CR and LF are removed (a "//" comment would swallow the rest of the program),
+ *  - every "%XX" is percent-decoded before the code runs.
+ * Rewrites the minified bundle token by token so it is one line, has no comments, and contains no
+ * percent-hex sequence, while meaning exactly the same.
  */
-export function escapePercentSequences(code) {
-    const out = code.replace(/%(?=[0-9A-Fa-f]{2})/g, '\\x25');
+export function makeJavascriptUrlSafe(code) {
+    const edits = [];
+    const literal = (raw) =>
+        raw.replace(/%(?=[0-9A-Fa-f]{2})/g, '\\x25').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+    let prevEnd = 0;
+    for (const tok of tokenizer(code, { ecmaVersion: 'latest' })) {
+        const gap = code.slice(prevEnd, tok.start);
+        // a line break between tokens could be load-bearing (ASI): refuse instead of guessing
+        if (/[^ ]/.test(gap)) throw new Error(`unexpected whitespace/comment between tokens at ${prevEnd}`);
+        const raw = code.slice(tok.start, tok.end);
+        const label = tok.type.label;
+        if (label === 'string' || label === 'template' || label === 'invalidTemplate' || label === 'regexp') {
+            const safe = literal(raw);
+            if (safe !== raw) edits.push([tok.start, tok.end, safe]);
+        } else if ((raw === '%' || raw === '%=') && /[0-9A-Fa-f]/.test(code[tok.end] || '')) {
+            edits.push([tok.end, tok.end, ' ']); // "a%b2" -> "a% b2"
+        }
+        prevEnd = tok.end;
+    }
+    let out = '';
+    let pos = 0;
+    for (const [start, end, text] of edits) {
+        out += code.slice(pos, start) + text;
+        pos = end;
+    }
+    out += code.slice(pos, prevEnd);
+    if (/[\r\n\t]/.test(out)) throw new Error('line break or tab left in bundle');
     if (/%[0-9A-Fa-f]{2}/.test(out)) throw new Error('percent sequence left in bundle');
     return out;
 }
@@ -54,7 +81,7 @@ export async function buildExtension({ base, outDir = OUT_DIR }) {
         target: 'chrome100',
         minifyIdentifiers: true,
         minifySyntax: true,
-        minifyWhitespace: false,
+        minifyWhitespace: true,
         legalComments: 'none',
         charset: 'utf8',
         write: false,
@@ -63,7 +90,7 @@ export async function buildExtension({ base, outDir = OUT_DIR }) {
             __VERSION__: JSON.stringify(pkg.version),
         },
     });
-    const body = escapePercentSequences(result.outputFiles[0].text);
+    const body = makeJavascriptUrlSafe(result.outputFiles[0].text);
     const code = header({ version: pkg.version, base, author: pkg.author || 'shield' }) + body;
     await mkdir(outDir, { recursive: true });
     await writeFile(path.join(outDir, EXT_FILE), code);

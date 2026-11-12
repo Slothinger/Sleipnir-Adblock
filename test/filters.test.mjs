@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { build } from '../tools/build-filters.mjs';
-import { escapePercentSequences } from '../tools/build-ext.mjs';
+import { makeJavascriptUrlSafe } from '../tools/build-ext.mjs';
 import { hostsFromUrlPattern } from '../tools/lib/urlpattern.mjs';
 import { decodeHashSet, encodeHashSet, hashSetHas, shardIndex, shardLabels } from '../src/shared/host.js';
 import { adSelectors, allowBits, siteRules, FLAG_GENERICHIDE } from '../src/rules.js';
@@ -54,6 +54,18 @@ async function fixture() {
     await writeFile(path.join(lists, 'easylistgermany.txt'), 'deutschland.de##.werbung\n');
     await writeFile(path.join(lists, 'easyprivacy.txt'), EASYPRIVACY);
     await writeFile(path.join(lists, 'cookies.txt'), '##.cookie-banner\nexample.com##.cookie-wall\n');
+    await writeFile(
+        path.join(lists, 'annoyances.txt'),
+        [
+            '! fanboy_annoyance_general_hide.txt',
+            '##.newsletter-popup',
+            '||annoy.example^',
+            '! fanboy_notifications_specific_hide.txt',
+            'amazon.de,amazon.com###nav-app-banner-container',
+            '! easylist_cookie_specific_hide.txt',
+            'amazon.de###cookie-thing',
+        ].join('\n'),
+    );
     const out = path.join(dir, 'f');
     const { manifest } = await build({ offlineDir: lists, outDir: out });
     const read = async (name) => JSON.parse(await readFile(path.join(out, name), 'utf8'));
@@ -170,6 +182,14 @@ test('cookie list goes to its own file and site rules, never to network blocking
     assert.ok(!(await selectorsFor('random.org')).includes('.cookie-banner'), 'cookie hiding waits for the reject attempt');
 });
 
+test('annoyance list contributes only site-specific hides, without its cookie sections', async () => {
+    const sels = await selectorsFor('www.amazon.de');
+    assert.ok(sels.includes('#nav-app-banner-container'));
+    assert.ok(!sels.includes('#cookie-thing'), 'cookie banners are left to the reject step');
+    assert.ok(!sels.includes('.newsletter-popup'), 'no generic rules from the big list');
+    assert.equal((await matcherFor('www.news.de')).blocks('https://annoy.example/x.js'), false);
+});
+
 test('global allowlist bits match subdomains', () => {
     const allow = { 'bank.de': 3, 'shop.example': 2 };
     assert.equal(allowBits(allow, 'online.bank.de'), 3);
@@ -201,13 +221,13 @@ test('urlPattern host extraction', () => {
     assert.equal(hostsFromUrlPattern('^https://.*/consent'), null);
 });
 
-test('percent sequences are escaped for javascript: URLs', () => {
-    const src = 'var a = "x%3Dy", b = /%20/, c = 5 % 2;';
-    const out = escapePercentSequences(src);
-    assert.ok(!/%[0-9A-Fa-f]{2}/.test(out));
-    const fn = new Function(out + 'return [a, b.source, c];');
-    const [a, b, c] = fn();
-    assert.equal(a, 'x%3Dy');
-    assert.ok(new RegExp(b).test('%20'));
-    assert.equal(c, 1);
+test('bundle survives javascript: URL processing (line breaks removed, %XX decoded)', () => {
+    const src = 'var a="x%3Dy",b=/%20\t/,c=5%3,d=7,e=d%b2(),t=`l1\nl2 %41`;function b2(){return 4}';
+    const out = makeJavascriptUrlSafe(src);
+    // what Chromium does to WebView.loadUrl("javascript:" + code) before running it
+    const asRun = out.replace(/[\t\r\n]/g, '').replace(/%([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    const run = (code) => new Function(code + ';return [a, b.test("%20\\t"), b.test("x"), c, e, t];')();
+    assert.deepEqual(run(asRun), run(src));
+    assert.throws(() => makeJavascriptUrlSafe('var a=1\nvar b=2'), /between tokens/);
+    assert.throws(() => makeJavascriptUrlSafe('var a=1;// comment\nvar b=2'), /between tokens/);
 });

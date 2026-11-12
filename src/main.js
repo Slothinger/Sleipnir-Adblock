@@ -5,12 +5,13 @@ import { readSiteConfig, writeSiteConfig } from './sitecfg.js';
 import { adSelectors, allowBits, cookieSelectors, FLAG_DOCUMENT, siteRules } from './rules.js';
 import { addHideSheet, matchingSelectors } from './cosmetic.js';
 import { installNetworkHooks, NetMatcher } from './network.js';
-import { CookieHandler, findConsentOverlay, hideBackdrops, unlockScroll } from './cookies.js';
+import { CookieHandler, findConsentOverlay } from './cookies.js';
+import { findOverlay, hideBackdrops, unlockScroll } from './overlay.js';
 import { mountUi } from './ui.js';
 import { VERSION } from './env.js';
 
 const DEFAULT_SETTINGS = { ads: true, network: true, cookies: true, button: true };
-const STRONG_CONSENT = /cookie|consent|einwillig|zustimm/i;
+const ANTI_ADBLOCK = /ad-?blocker|adblock|werbe-?blocker|werbeblock|blocker deaktiv|disable your ad|bloqueur de pub/i;
 
 function main() {
     if (window.top !== window || !/^https?:$/.test(location.protocol) || !location.hostname) return;
@@ -51,6 +52,7 @@ function main() {
         cookiesOn: state.cookiesOn,
         blocked: state.matcher ? state.matcher.blockedCount : 0,
         selectors: state.adSelectors.length,
+        antiAdblockHidden: !!state.antiAdblockHidden,
         cookie: { status: cookie.status, cmp: cookie.cmp, leftoverHidden: !!cookie.leftoverHidden },
         filters: state.manifest && { built: state.manifest.built, lists: state.manifest.lists || [] },
         version: VERSION,
@@ -118,6 +120,17 @@ function main() {
             installNetworkHooks(matcher);
         }
         updateUi();
+        // anti-adblock notices ("Kein Bock auf Werbung?") come after the page noticed missing ads
+        for (const delay of [1000, 2000, 3000, 6000]) {
+            await new Promise((r) => setTimeout(r, delay));
+            const wall = findOverlay((el, text) => ANTI_ADBLOCK.test(text));
+            if (!wall) continue;
+            wall.style.setProperty('display', 'none', 'important');
+            hideBackdrops();
+            unlockScroll();
+            state.antiAdblockHidden = true;
+            updateUi();
+        }
     }
 
     async function startCookies(manifest, site, rules) {
@@ -129,12 +142,7 @@ function main() {
                 state.cookieSelectorsApplied.push(...specific);
             }
             let listApplied = false;
-            let unlocked = false;
-            const unlock = () => {
-                if (!unlocked) unlockScroll();
-                unlocked = true;
-            };
-            if (cookie.status === 'hidden') unlock();
+            if (cookie.status === 'hidden') unlockScroll();
             // Leftovers: CMPs no rule could reject, and "pay or okay" walls that only appear after a reject.
             const hideLeftovers = async () => {
                 if (!findConsentOverlay()) return;
@@ -147,10 +155,10 @@ function main() {
                         state.cookieSelectorsApplied.push(...generic);
                     }
                 }
-                const left = findConsentOverlay();
-                if (left && STRONG_CONSENT.test(left.innerText || '')) left.style.setProperty('display', 'none', 'important');
+                const left = findConsentOverlay(true);
+                if (left) left.style.setProperty('display', 'none', 'important');
                 hideBackdrops();
-                unlock();
+                unlockScroll();
                 if (cookie.status === 'rejected') cookie.leftoverHidden = true;
                 else if (cookie.status !== 'failed') cookie.set('hidden');
                 updateUi();

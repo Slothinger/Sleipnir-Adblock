@@ -112,7 +112,10 @@ export async function build({ offlineDir = null, outDir = OUT } = {}) {
     for (const list of lists.filter((l) => l.enabled)) {
         const text = offlineDir ? await readFile(path.join(offlineDir, `${list.id}.txt`), 'utf8') : await download(list.url);
         const version = (/^!\s*Version:\s*(.+)$/m.exec(text) || [])[1] || null;
-        compiler.addList(text, list.kind);
+        compiler.addList(text, list.kind, {
+            specificOnly: !!list.specificOnly,
+            skipSections: list.skipSections ? new RegExp(list.skipSections) : null,
+        });
         listInfo.push({ id: list.id, title: list.title, version });
     }
     compiler.addList(userFilters, 'ads');

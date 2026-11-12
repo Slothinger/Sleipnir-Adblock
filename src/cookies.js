@@ -1,7 +1,7 @@
 // Cookie banners: reject via DuckDuckGo autoconsent (CMP rules + heuristics), then hide what is left.
 
 import AutoConsent, { decodeRules } from '@duckduckgo/autoconsent';
-import { addHideSheet } from './cosmetic.js';
+import { findOverlay } from './overlay.js';
 
 const TERMINAL = new Set(['nothingDetected', 'done', 'optOutSucceeded', 'optOutFailed']);
 const CONSENT_TEXT =
@@ -95,62 +95,22 @@ export class CookieHandler {
     }
 }
 
-/** A visible fixed/sticky overlay that looks like a consent prompt, found by hit-testing the viewport. */
-export function findConsentOverlay() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const points = [
-        [w / 2, h / 2],
-        [w / 2, h - 30],
-        [w / 2, h * 0.8],
-        [w / 2, 40],
-        [w * 0.25, h * 0.65],
-    ];
-    const seen = new Set();
-    for (const [x, y] of points) {
-        for (let el = document.elementFromPoint(x, y); el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
-            if (seen.has(el)) break;
-            seen.add(el);
-            const cs = getComputedStyle(el);
-            if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
-            const r = el.getBoundingClientRect();
-            if (r.width * r.height < 0.08 * w * h) break; // floating "cookie settings" buttons, chat bubbles
-            const text = (el.innerText || '').slice(0, 3000);
-            if (text.length > 20 && CONSENT_TEXT.test(text)) return el;
-            break;
-        }
-    }
-    return null;
+const CONSENT_ATTR = /consent|cookie|\bcmp|gdpr|privacy|sp_message|didomi|usercentrics|onetrust|cookiebot|truste/i;
+const STRONG_CONSENT = /cookie|consent|einwillig|zustimm/i;
+
+function attrs(el) {
+    return (el.id || '') + ' ' + (el.getAttribute('class') || '');
 }
 
-/** Empty full-screen dimming layers left behind once the consent box itself is hidden. */
-export function hideBackdrops() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    for (const [x, y] of [[w / 2, h / 2], [w / 4, h / 4], [w * 0.75, h * 0.75]]) {
-        for (let el = document.elementFromPoint(x, y); el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
-            if (getComputedStyle(el).position !== 'fixed') continue;
-            const r = el.getBoundingClientRect();
-            if (r.width * r.height >= 0.9 * w * h && !(el.innerText || '').trim()) el.style.setProperty('display', 'none', 'important');
-            break;
-        }
-    }
-}
-
-/** Undo scroll locks left behind by a consent overlay we hid. */
-export function unlockScroll() {
-    const html = document.documentElement;
-    const body = document.body;
-    if (!body) return;
-    const locked = [html, body].some((el) => {
-        const cs = getComputedStyle(el);
-        return cs.overflow === 'hidden' || cs.overflowY === 'hidden' || cs.position === 'fixed';
+/**
+ * A visible fixed/sticky overlay that looks like a consent prompt. `strong` = sure enough to hide the
+ * element itself (not just to load the cookie hiding list).
+ */
+export function findConsentOverlay(strong = false) {
+    return findOverlay((el, text) => {
+        if (text.length > 20 && (strong ? STRONG_CONSENT : CONSENT_TEXT).test(text)) return true;
+        // cross-origin CMP iframes (Sourcepoint, TrustArc): no readable text, but telling ids and URLs
+        if (CONSENT_ATTR.test(attrs(el))) return true;
+        return [...el.querySelectorAll('iframe')].some((f) => CONSENT_ATTR.test(attrs(f) + ' ' + (f.getAttribute('src') || '') + ' ' + (f.title || '')));
     });
-    if (!locked) return;
-    const bodyFixed = getComputedStyle(body).position === 'fixed';
-    const top = bodyFixed ? -parseInt(body.style.top || '0', 10) || 0 : 0;
-    let css = 'html,body{overflow:auto!important;overflow-y:auto!important}';
-    if (bodyFixed) css += 'body{position:static!important;top:auto!important}';
-    addHideSheet([], css);
-    if (top) window.scrollTo(0, top);
 }

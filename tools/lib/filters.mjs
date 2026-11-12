@@ -46,18 +46,38 @@ export class FilterCompiler {
         return s;
     }
 
-    /** @param kind 'ads' | 'cookies' */
-    addList(text, kind) {
+    /**
+     * @param kind 'ads' | 'cookies'
+     * @param opts.specificOnly only domain-bound hide rules (big lists whose generic part would bloat every page)
+     * @param opts.skipSections regex: ignore list sections whose header ("! name.txt" / "! *** name ***") matches
+     */
+    addList(text, kind, { specificOnly = false, skipSections = null } = {}) {
         this.section = '';
         for (const raw of text.split(/\r?\n/)) {
             const line = raw.trim();
-            if (line.startsWith('! *** ')) this.section = line;
+            if (line.startsWith('! *** ') || /^! [\w-]+\.txt$/.test(line)) this.section = line;
             if (!line || line[0] === '!' || line[0] === '[') continue;
+            if (skipSections && skipSections.test(this.section)) continue;
+            if (specificOnly) {
+                this.addSpecificHide(line);
+                continue;
+            }
             if (this.addCosmetic(line, kind)) continue;
             if (kind === 'cookies') continue; // cookie lists: only hide rules; never block CMP scripts we need to talk to
             if (this.addNetwork(line)) this.stats.network++;
             else this.stats.skipped++;
         }
+    }
+
+    /** "a.com,~b.a.com##sel" only; everything else is ignored. */
+    addSpecificHide(line) {
+        const m = /^([^#]+?)##(.+)$/.exec(line);
+        const selector = m && normalizeSelector(m[2]);
+        const domains = selector && parseDomains(m[1], ',');
+        if (!domains || !domains.pos.length) return;
+        this.stats.cosmetic++;
+        for (const d of domains.pos) this.site(d).h.add(selector);
+        for (const d of domains.neg) this.site(d).x.add(selector);
     }
 
     /** @returns true if the line was a cosmetic rule (supported or not). */

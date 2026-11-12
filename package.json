@@ -1,6 +1,6 @@
 {
   "name": "sleipnir-shield",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Werbe-, Tracker- und Cookie-Banner-Blocker für Sleipnir Mobile (Android)",
   "scripts": {
     "test": "node --test test/*.test.mjs",
@@ -11,6 +11,7 @@
   "license": "MPL-2.0",
   "devDependencies": {
     "@duckduckgo/autoconsent": "^18.3.0",
+    "acorn": "^8.19.0",
     "esbuild": "^0.28.2",
     "playwright-core": "1.49"
   },

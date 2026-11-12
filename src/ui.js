@@ -150,6 +150,7 @@ export function mountUi(api) {
         if (s.error) lines.push('Filter konnten nicht geladen werden: ' + s.error);
         if (s.adsOn) lines.push(`Werbung: ${s.blocked} Anfragen blockiert, ${s.selectors} Ausblendregeln aktiv`);
         else lines.push('Werbeblocker auf dieser Seite aus');
+        if (s.antiAdblockHidden) lines.push('Adblock-Hinweis der Seite ausgeblendet');
         const c = s.cookie;
         const via = c.cmp ? ` (${c.cmp})` : '';
         if (!s.cookiesOn) lines.push('Cookie-Ablehnung auf dieser Seite aus');

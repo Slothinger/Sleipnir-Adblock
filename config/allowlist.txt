@@ -6,3 +6,7 @@
 # meinebank.de
 # example.com ads
 # shop.example cookies
+
+# "Zustimmen oder Abo"-Seiten ohne Inhalt bei Ablehnung: Cookie-Automatik aus, einmal selbst
+# zustimmen. Werbung blockiert Shield dort trotzdem.
+derstandard.at cookies
